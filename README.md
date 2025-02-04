@@ -18,8 +18,9 @@ BOT_TOKEN=<your-telegram-bot-token>
 API_KEY=<your-openai-api-key>
 
 
-BOT_TOKEN: This is your Telegram bot token, which you can generate using BotFather on Telegram.
-API_KEY: This is your OpenAI API key, which you'll get from your OpenAI developer account.
+
+- **BOT_TOKEN**: This is your Telegram bot token, which you can generate using BotFather on Telegram.
+- **API_KEY**: This is your OpenAI API key, which you'll get from your OpenAI developer account.
 
 
 ## Running the Bot
@@ -33,5 +34,5 @@ $ npm run start:dev
 
 ## Available Commands
 
-/start - Start a conversation with the bot.
-/help - Display information about the bot and how to use it
+- **/start** - Start a conversation with the bot.
+- **/help** - Display information about the bot and how to use it
