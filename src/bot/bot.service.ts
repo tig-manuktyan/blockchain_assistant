@@ -22,14 +22,43 @@ export class BotService {
 
   @Hears(/.*/)
   async handleMessage(@Ctx() ctx: Context) {
-    const input = ctx?.message?.['text'].trim();
-
+    const input = ctx?.message?.['text']?.trim();
+  
+    if (!input) {
+      return await ctx.reply('Пожалуйста, введите текст.');
+    }
+  
     try {
-      const coin = await this.cryptoService.findCoin(input);
+      const answer = await this.openAiService.ask(input) as string;
+      const condition = this.parseAnswer(answer);
+  
+      if (condition?.type === 'crypto') {
+        return await this.handleCryptoRequest(ctx, condition);
+      } else {
+        return await this.handleGeneralRequest(ctx, input);
+      }
+    } catch (error) {
+      this.logger.error(`Ошибка при обработке запроса "${input}":`, error);
+      await ctx.reply('Извините, произошла ошибка при обработке вашего запроса.');
+    }
+  }
+  
+  private parseAnswer(answer: string) {
+    try {
+      return JSON.parse(answer);
+    } catch (error) {
+      this.logger.error('Ошибка при разборе ответа от OpenAI:', error);
+      return null;
+    }
+  }
+  
+  private async handleCryptoRequest(ctx: Context, condition: any) {
+    try {
+      const coin = await this.cryptoService.findCoin(condition?.symbol ?? '');
       if (coin) {
         const price = await this.cryptoService.getPriceById(coin.id);
         if (price !== null) {
-          return await ctx.reply(
+          await ctx.reply(
             `Текущая цена для "${coin.name}" (${coin.symbol.toUpperCase()}): ${price} USD. Что-то еще?`,
           );
         } else {
@@ -37,15 +66,18 @@ export class BotService {
         }
       }
     } catch (error) {
-      this.logger.error(`Ошибка при обработке крипто-запроса "${input}":`, error);
+      this.logger.error(`Ошибка при обработке крипто-запроса:`, error);
+      await ctx.reply('Не удалось обработать запрос о криптовалюте.');
     }
-
+  }
+  
+  private async handleGeneralRequest(ctx: Context, input: string) {
     try {
-      const answer = await this.openAiService.ask(input);
-      await ctx.reply(answer);
+      const askCorrect = await this.openAiService.askCorrect(input) as string;
+       await ctx.reply(askCorrect);
     } catch (error) {
-      this.logger.error(`Ошибка при обработке Deepseek запроса "${input}":`, error);
-      await ctx.reply('Извините, произошла ошибка при обработке вашего запроса.');
+      this.logger.error('Ошибка при обработке запроса:', error);
+      await ctx.reply('Не удалось получить ответ, попробуйте позже.');
     }
   }
 

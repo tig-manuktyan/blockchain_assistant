@@ -6,6 +6,7 @@ import OpenAI from 'openai';
 export class OpenAiService {
   private readonly logger = new Logger(OpenAiService.name);
   private readonly openai: OpenAI;
+  private readonly openAICommandTemplate: string;
 
   constructor(
     private readonly configService: ConfigService,
@@ -13,11 +14,40 @@ export class OpenAiService {
     this.openai = new OpenAI({
       apiKey: this.configService.get('API_KEY'),
     });
+
+    this.openAICommandTemplate = `я тебе отправлю текст <<>> на внутри скобках, ты мне догадайся если я тебе отправлю смс о криптавалют или проста имя токена , мне возвращай объект {
+type: "crypto",
+symbol: имя или symbol токена
+}
+если отправлю смс  и там нет никаких криптавалют отправь мне 
+{
+type: "default ",
+text: а ждет тот текст который я тебе отправил 
+  }
+
+  << {input_text} >>`;
   }
 
   async ask(inputText: string): Promise<string> {
     const openAIQuery = { input_text: inputText };
+    const command = this.buildCommand(inputText);
+    console.log(command,"command");
+    
+    return this.fetchOpenAICompletion(openAIQuery, command);
+  }
+
+  async askCorrect(inputText: string): Promise<string> {
+    const openAIQuery = { input_text: inputText };
     return this.fetchOpenAICompletion(openAIQuery, inputText);
+  }
+
+  /**
+   * Builds the OpenAI command by replacing placeholders with the actual input text.
+   * @param inputText The input text.
+   * @returns The formatted command.
+   */
+  private buildCommand(inputText: string): string {
+    return this.openAICommandTemplate.replace('{input_text}', inputText);
   }
 
   private async fetchOpenAICompletion(inputData: any, instruction: string): Promise<string> {
@@ -32,7 +62,7 @@ export class OpenAiService {
         max_tokens: 200,
         temperature: 0.1,
       }) as any;
-
+      
       return this.cleanResponse(response?.choices[0]?.message?.content);
     } catch (error) {
       console.error('Error generating completion:', error);
