@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { CryptoService } from '../crypto/crypto.service';
+import { ChatHistoryService } from '../chat/chat-history.service';
 
 @Injectable()
 export class OpenAiService {
@@ -12,48 +13,35 @@ export class OpenAiService {
   constructor(
     private readonly configService: ConfigService,
     private readonly cryptoService: CryptoService,
+    private readonly chatHistoryService: ChatHistoryService,
+
   ) {
     this.openai = new OpenAI({
       apiKey: this.configService.get('API_KEY'),
     });
   }
 
-  async ask(inputText: string): Promise<string> {
-    const openAIQuery = { input_text: inputText };
-    // const command = this.buildCommand(inputText);
-    // console.log(command, "command");
-
-    return this.fetchOpenAICompletion(openAIQuery, inputText);
+  async ask(inputText: string, userId: number): Promise<string> {
+    return this.fetchOpenAICompletion({ input_text: inputText }, inputText, userId);
   }
 
-  async askCorrect(inputText: string): Promise<string> {
-    const openAIQuery = { input_text: inputText };
-    return this.fetchOpenAICompletion(openAIQuery, inputText);
-  }
-
-  /**
-   * Builds the OpenAI command by replacing placeholders with the actual input text.
-   * @param inputText The input text.
-   * @returns The formatted command.
-   */
-  private buildCommand(inputText: string): string {
-    return this.openAICommandTemplate.replace('{input_text}', inputText);
-  }
-
-  private async fetchOpenAICompletion(inputData: any, instruction: string): Promise<any> {
+  private async fetchOpenAICompletion(inputData: any, instruction: string, userId: number): Promise<any> {
     try {
+      const history = await this.chatHistoryService.getHistory(userId) as any;
+      const messages = [
+        {
+          role: "system",
+          content: "Ты — ассистент, способный определять, спрашивает ли пользователь о цене криптовалюты. " +
+            "Если это вопрос о цене, вызови функцию getCryptoPrice. " +
+            "Если это обычный вопрос, ответь сам."
+        },
+        ...history,
+        { role: 'user', content: instruction },
+
+      ]
       const response = await this.openai.chat.completions.create({
         model: 'gpt-3.5-turbo-1106', // Ensure you are using a model that supports function calling
-        messages: [
-          {
-            role: "system",
-            content: "Ты — ассистент, способный определять, спрашивает ли пользователь о цене криптовалюты. " +
-              "Если это вопрос о цене, вызови функцию getCryptoPrice. " +
-              "Если это обычный вопрос, ответь сам."
-          },
-          { role: 'user', content: `JSON:\n${JSON.stringify(inputData)}` },
-          { role: 'user', content: instruction },
-        ],
+        messages,
         max_tokens: 200,
         temperature: 0.1,
         functions: [
@@ -65,10 +53,14 @@ export class OpenAiService {
               properties: {
                 coinName: {
                   type: "string",
-                  description: "Название или тикер монеты, например 'BTC' или 'Bitcoin'"
+                  description: "Название или тикер монеты, например 'Bitcoin'"
+                },
+                convertText: {
+                  type: "string",
+                  description: "Форматированный текст ответа на том же языке, что и вопрос. Например: 'Цена Bitcoin в USD: '"
                 }
               },
-              required: ["coinName"]
+              required: ["coinName", "convertText"]
             }
           }
         ],
@@ -76,7 +68,8 @@ export class OpenAiService {
       });
 
       const message = response.choices?.[0]?.message;
-
+      let reply = message?.content || 'Ошибка';
+  
       // Check if OpenAI wants to call the function
       if (message?.function_call) {
         const { name, arguments: args } = message.function_call;
@@ -84,19 +77,21 @@ export class OpenAiService {
           console.log(message.function_call, 111);
 
           const parsedArgs = JSON.parse(args);
-          return await this.getCryptoPrice(parsedArgs.coinName);
+          return await this.getCryptoPrice(parsedArgs);
         }
       }
 
+      await this.chatHistoryService.addMessage(userId, { role: 'user', content: instruction });
+      await this.chatHistoryService.addMessage(userId, { role: 'assistant', content: reply })
       return this.cleanResponse(message?.content || '');
     } catch (error) {
       console.error('Error generating completion:', error);
       throw new Error('Failed to generate completion');
     }
   }
-  private async getCryptoPrice(coinName: string): Promise<string> {
-    const price = await this.cryptoService.getPriceById(coinName)
-    return `Цена ${coinName}  в USD: ${price}`; // Replace with real API data
+  private async getCryptoPrice(inputDto: any): Promise<string> {
+    const price = await this.cryptoService.getPriceById(inputDto.coinName.toLocaleLowerCase())
+    return inputDto.convertText + " " + price; 
   }
 
 

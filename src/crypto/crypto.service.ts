@@ -37,6 +37,7 @@ export class CryptoService {
             const response = await axios.get(COINGECKO.PRICE_URL, {
                 params: { ids: coinId, vs_currencies: 'usd' },
             });
+            
             const price = response.data[coinId]?.usd;
             return price ?? null;
         } catch (error) {
