@@ -30,14 +30,15 @@ export class BotService {
 
     try {
       const answer = await this.openAiService.ask(input) as string;
-      const condition = this.parseAnswer(answer);
-      console.log(condition,"conditioncondition");
+      // const condition = this.parseAnswer(answer);
+      // console.log(condition,"conditioncondition");
       
-      if (condition?.type === 'crypto') {
-        return await this.handleCryptoRequest(ctx, condition);
-      } else {
-        return await this.handleGeneralRequest(ctx, input);
-      }
+      // if (condition?.type === 'crypto') {
+      //   return await this.handleCryptoRequest(ctx, condition);
+      // } else {
+        // return await this.handleGeneralRequest(ctx, input);
+      // }
+      await ctx.reply(answer)
     } catch (error) {
       this.logger.error(`Ошибка при обработке запроса "${input}":`, error);
       await ctx.reply('Извините, произошла ошибка при обработке вашего запроса.');
